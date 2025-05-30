@@ -10,4 +10,6 @@ Preprocessing
   2. Preprocessing/generate_fif.py
     a. Select target stings such as 'shift', 'trigin1', 'auxin0'
           *some edits required for anything beyond shift and trigin
-  3. Inspect time-series data from the fif file, and generate filtered version if desired
+  3. Preprocessing/inspec_sensor_data:
+    a. Plot time-series, average noise floor and spectrogram
+    b. If desired, save a new .fif which is bandpass+notch filtered

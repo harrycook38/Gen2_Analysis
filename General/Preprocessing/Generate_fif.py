@@ -27,7 +27,7 @@ scal_fac = round(-299 * P1 ** (-0.779), 2)
 sfreq = 837.1
 
 # Define the list of target strings used to import the corresponding csv file
-target_strings = ['stream_shift_avg', 'trigin1_avg']
+target_strings = ['stream_shift_avg', 'trigin1_avg', 'auxin0_avg']
 
 #%% --- File Loading functions ---
 # Function to load data from CSV files in the specified directory
@@ -119,7 +119,9 @@ folder_data = {
         'B_field': scale_and_convert(extracted_files['stream_shift_avg'], scal_fac * 0.071e-9),
         
         # The 'trigin1' data is processed without scaling in this case
-        'trigin1': scale_and_convert(extracted_files['trigin1_avg'])
+        'trigin1': scale_and_convert(extracted_files['trigin1_avg']),
+
+        'auxin0': scale_and_convert(extracted_files['auxin0_avg'])
     }
 }
 
@@ -146,8 +148,8 @@ def build_raw(data_dict, ch_names, ch_types, sfreq):
     return mne.io.RawArray(data, info)
 
 # Channel names and types for MNE Raw object creation, we cast our gradiometer to the 'mag' channel for 'b' units
-ch_names = ['B_field', 'trigin1']
-ch_types = ['mag', 'stim']         
+ch_names = ['B_field', 'trigin1','auxin0']
+ch_types = ['mag', 'stim','stim'] 
 
 # Create the directory if it doesn't exist
 os.makedirs(output_directory, exist_ok=True)

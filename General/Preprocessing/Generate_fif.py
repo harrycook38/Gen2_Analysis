@@ -8,13 +8,14 @@ import mne
 # Set the base directory where the data files are stored
 base_directory = r'W:\Data\2025_05_29_Motor_and_FL\Us\Tom_motor_1_000\concat'
 
+# Set the output directory where the processed MNE Raw file will be saved
 output_directory = r'W:\Data\2025_05_29_Motor_and_FL\Us\Tom_motor_1_000\mne_raw' 
 
 # Extract the folder name from the path for use in filenames later
 folder_name = os.path.basename(base_directory)
 output_name = os.path.basename(output_directory)
 
-fif_fname = os.path.join(output_directory, f'{output_name}_mne_raw.fif')
+fif_fname = os.path.join(output_directory, f'{output_name}.fif')
 
 # Scaling factor input, P value of PID on PLL
 P1 = 50

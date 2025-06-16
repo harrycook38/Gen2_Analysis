@@ -1,22 +1,68 @@
 import os
 import numpy as np 
 import pandas as pd
+import matplotlib
+matplotlib.use('QtAgg')  # Use QtAgg backend for interactive plotting
 import matplotlib.pyplot as plt
 import mne
 
 #%% --- Constants ---
-file_name = 'mne_raw_filtered_3-45Hz.fif'
+file_name = '3-45Hz_20250529_165519_sub-Tom_file-BrainvsUs1_raw.fif'
 
-file_location = r'W:\Data\2025_05_29_Motor_and_FL\Us\Tom_motor_1_000\mne_raw'
+file_location = r'W:\Data\2025_05_29_Motor_and_FL\FL\processed'
 
 fif_fname = os.path.join(file_location, file_name)
+
+sens_type = 1 # 0 for NMOR, 1 for Fieldline
+
+
+
 #%%
+
+#MNE doesn't like aux triggers sometimes, so we need to help it out with an edge-detection function
+
+def detect_ttl_rising_edges(raw, channel_name, threshold=2.5, min_interval=0.2, event_id=1, verbose=True):
+    # Extract signal
+    signal = raw.get_data(picks=channel_name)[0]
+    sfreq = raw.info['sfreq']
+
+    # Find rising edges
+    above = signal > threshold
+    rising_edges = np.where(np.diff(above.astype(int)) == 1)[0] + 1  # +1 for shift
+
+    # Debounce (enforce minimum spacing between triggers)
+    if rising_edges.size == 0:
+        if verbose:
+            print(f"No rising edges found in channel '{channel_name}'.")
+        return np.empty((0, 3), dtype=int)
+
+    min_samples = int(sfreq * min_interval)
+    filtered = [rising_edges[0]]
+    for idx in rising_edges[1:]:
+        if idx - filtered[-1] > min_samples:
+            filtered.append(idx)
+
+    # Format events
+    events = np.column_stack((filtered, np.zeros(len(filtered), dtype=int), np.full(len(filtered), event_id)))
+
+    if verbose:
+        print(f"Detected {len(events)} rising edge events in '{channel_name}'")
+
+    return events
+
+
 raw_filtered = mne.io.read_raw_fif(fif_fname, preload=True)  # Load the filtered raw data
-# Find the events from the stimulus channel ('trigin1'), which is the audio onset
-events = mne.find_events(raw_filtered, stim_channel='trigin1', verbose=True)
+
+
+if sens_type == 0:
+    events = mne.find_events(raw_filtered, stim_channel='trigin1', verbose=True)
+    picks = mne.pick_channels(raw_filtered.info['ch_names'], include=['B_field'])
+if sens_type == 1:
+
+    events = detect_ttl_rising_edges(raw_filtered, channel_name='ai120', threshold=2.5)
+    picks = mne.pick_channels(raw_filtered.info['ch_names'], include=['s69_bz'])
 
 # Pick the channels to process
-picks = mne.pick_types(raw_filtered.info, meg='mag')
 
 reject = dict(mag=5e-12)  # Define rejection criteria for the magnetometer channel
 epochs = mne.Epochs(
@@ -29,7 +75,6 @@ epochs = mne.Epochs(
     verbose=True,
     reject = reject
 )
-#.filter(5., 35., method='iir', iir_params=dict(order=4, ftype='butter'))  # Apply narrower band filter
 
 # --- Evoked Response ---
 evoked = epochs.average()  # Compute the evoked response

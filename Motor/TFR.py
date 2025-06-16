@@ -18,7 +18,7 @@ events = mne.find_events(raw_filtered, stim_channel='trigin1', verbose=True)
 # Pick the channels to process
 picks = mne.pick_types(raw_filtered.info, meg='mag')
 
-reject = dict(mag=4e-12)  # Define rejection criteria for the magnetometer channel
+reject = dict(mag=5e-12)  # Define rejection criteria for the magnetometer channel
 epochs = mne.Epochs(
     raw_filtered, events, event_id=None,  # Use filtered data and event informatio
     tmin=-0.5, tmax=2.,

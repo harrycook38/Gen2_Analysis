@@ -7,15 +7,13 @@ import matplotlib.pyplot as plt
 import mne
 
 #%% --- Constants ---
-file_name = '3-45Hz_20250529_165519_sub-Tom_file-BrainvsUs1_raw.fif'
+file_name = '3-45Hz_20250529_142407_sub-Ania_file-BRAINandUs1_raw.fif'
 
 file_location = r'W:\Data\2025_05_29_Motor_and_FL\FL\processed'
 
 fif_fname = os.path.join(file_location, file_name)
 
 sens_type = 1 # 0 for NMOR, 1 for Fieldline
-
-
 
 #%%
 
@@ -50,9 +48,7 @@ def detect_ttl_rising_edges(raw, channel_name, threshold=2.5, min_interval=0.2, 
 
     return events
 
-
 raw_filtered = mne.io.read_raw_fif(fif_fname, preload=True)  # Load the filtered raw data
-
 
 if sens_type == 0:
     events = mne.find_events(raw_filtered, stim_channel='trigin1', verbose=True)
@@ -105,7 +101,7 @@ def plot_tfr(tfr, evoked, vmin=-0.5e-25, vmax=2.0e-25, cmap='RdBu_r'):
     plt.show()
 
 # --- Time-frequency analysis parameters ---
-frequencies = np.linspace(10, 30, 100)  # Define the frequency range for TFR
+frequencies = np.linspace(2, 30, 100)  # Define the frequency range for TFR
 n_cycles = frequencies / 3.0  # Set the number of cycles for each frequency
 time_bandwidth = 2.0  # Time-bandwidth product for multitaper method
 

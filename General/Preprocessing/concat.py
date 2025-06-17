@@ -3,8 +3,8 @@ import csv
 from collections import defaultdict
 
 # Define your input/output paths
-input_folder = r'W:\Data\2025_05_29_Motor_and_FL\Us\Tom_motor_1_000'
-output_folder = r'W:\Data\2025_05_29_Motor_and_FL\Us\Tom_motor_1_000\concat'
+input_folder = r'W:\Data\2025_05_29_Motor_and_FL\Us\Motor_w_FL_2_000'
+output_folder = r'W:\Data\2025_05_29_Motor_and_FL\Us\Motor_w_FL_2_000\concat'
 os.makedirs(output_folder, exist_ok=True)
 
 # Group files by base name (excluding the numeric suffix)

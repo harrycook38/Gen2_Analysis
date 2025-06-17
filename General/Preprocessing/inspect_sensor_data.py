@@ -9,7 +9,7 @@ import mne
 
 #%%%
 
-file_name = '20250529_165519_sub-Tom_file-BrainvsUs1_raw.fif'
+file_name = '20250529_142407_sub-Ania_file-BRAINandUs1_raw.fif'
 
 file_location = r'W:\Data\2025_05_29_Motor_and_FL\FL'
 
@@ -18,7 +18,7 @@ fif_fname = os.path.join(file_location, file_name)
 l_freq = 3.0  # Low frequency for bandpass filter
 h_freq = 45.0  # High frequency for bandpass filter
 
-generate_filtered_fif = True  # Set to True to generate the filtered .fif file in same directory as the raw .fif file
+generate_filtered_fif = False  # Set to True to generate the filtered .fif file in same directory as the raw .fif file
 sens_type = 1  # 0 for NMOR, 1 for Fieldline
 
 #%% --- Load + Process Raw in MNE ---
@@ -53,16 +53,19 @@ def plot_spectrogram(raw_data, sfreq):
     
     # Compute the spectrogram: f - frequencies, t - time, Sxx - power spectral density
     f, t, Sxx = spectrogram(raw_data, fs=sfreq, nperseg=2048, noverlap=1024)
+
+    # Convert to Amplitude Spectral Density (sqrt of PSD)
+    ASD = np.sqrt(Sxx)/1e-12  # Convert to picotesla/√Hz
     
-    # Plot the spectrogram using pcolormesh to create a 2D heatmap of the power spectrum
-    plt.figure(figsize=(12, 5)) 
-    plt.pcolormesh(t, f, 10 * np.log10(Sxx), shading='gouraud')  # Convert power to dB scale and plot
+       # Plot ASD directly (linear scale, not dB)
+    plt.figure(figsize=(12, 5))
+    plt.pcolormesh(t, f, ASD, shading='gouraud')
     plt.ylim(0, 100)
-    plt.title('Spectrogram')  
+    plt.title('Spectrogram (Amplitude Spectral Density in picotesla/√Hz)')
     plt.ylabel('Frequency (Hz)')
-    plt.xlabel('Time (s)')  
-    plt.colorbar(label='Power (dB)') 
-    plt.tight_layout()  
+    plt.xlabel('Time (s)')
+    plt.colorbar(label='Amplitude (pT/√Hz)')
+    plt.tight_layout()
     plt.show()
 
 # Call the spectrogram function for the 'B_field' channel of the raw data

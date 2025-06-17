@@ -7,18 +7,16 @@ import matplotlib.pyplot as plt
 import mne
 
 #%% --- Constants ---
-file_name = '3-45Hz_20250529_142407_sub-Ania_file-BRAINandUs1_raw.fif'
+file_name = 'mne_raw_filtered_3-45Hz.fif'
 
-file_location = r'W:\Data\2025_05_29_Motor_and_FL\FL\processed'
+file_location = r'W:\Data\2025_05_28_motor_new_mount\motor_1son_2soff_1_final_000\concat\mne_raw'
 
 fif_fname = os.path.join(file_location, file_name)
 
-sens_type = 1 # 0 for NMOR, 1 for Fieldline
+sens_type = 0 # 0 for NMOR, 1 for Fieldline
 
 #%%
-
 #MNE doesn't like aux triggers sometimes, so we need to help it out with an edge-detection function
-
 def detect_ttl_rising_edges(raw, channel_name, threshold=2.5, min_interval=0.2, event_id=1, verbose=True):
     # Extract signal
     signal = raw.get_data(picks=channel_name)[0]
@@ -48,6 +46,45 @@ def detect_ttl_rising_edges(raw, channel_name, threshold=2.5, min_interval=0.2, 
 
     return events
 
+from mne.time_frequency import psd_array_welch
+
+def plot_asd_comparison_epochs(raw_data, epochs, picks, title='ASD Before and After Epoch Rejection', fmax=100):
+    sfreq = raw_data.info['sfreq']
+    data_before, _ = raw_data[picks]
+
+    # --- Before rejection ---
+    n_fft = min(round(10 * sfreq), data_before.shape[1])
+    psds_before, freqs = psd_array_welch(
+        data_before, sfreq=sfreq, fmin=0, fmax=fmax, n_fft=n_fft
+    )
+    asd_before = np.sqrt(psds_before)
+
+    # --- After rejection ---
+    epochs_data = epochs.get_data()  # shape: (n_epochs, n_channels, n_times)
+    n_epochs, n_channels, n_times = epochs_data.shape
+
+    # Reshape to (n_channels, n_epochs * n_times) to mimic continuous signal
+    data_after = epochs_data.transpose(1, 0, 2).reshape(n_channels, n_epochs * n_times)
+    n_fft = min(round(10 * sfreq), data_after.shape[1])  # update n_fft again
+    psds_after, _ = psd_array_welch(
+        data_after, sfreq=sfreq, fmin=0, fmax=fmax, n_fft=n_fft
+    )
+    asd_after = np.sqrt(psds_after)
+
+    # --- Plot ---
+    plt.figure(figsize=(10, 5))
+    plt.plot(freqs, asd_before.T, alpha=0.4, label='Before Rejection')
+    plt.plot(freqs, asd_after.T, alpha=0.6, label='After Rejection')
+    plt.yscale('log')
+    plt.grid(True)
+    plt.title(title)
+    plt.xlabel('Frequency (Hz)')
+    plt.ylabel('Amplitude (T/√Hz)')
+    plt.legend()
+    plt.tight_layout()
+    plt.show()
+
+
 raw_filtered = mne.io.read_raw_fif(fif_fname, preload=True)  # Load the filtered raw data
 
 if sens_type == 0:
@@ -60,7 +97,7 @@ if sens_type == 1:
 
 # Pick the channels to process
 
-reject = dict(mag=5e-12)  # Define rejection criteria for the magnetometer channel
+reject = dict(mag=4.5e-12)  # Define rejection criteria for the magnetometer channel
 epochs = mne.Epochs(
     raw_filtered, events, event_id=None,  # Use filtered data and event informatio
     tmin=-0.5, tmax=2.,
@@ -70,11 +107,14 @@ epochs = mne.Epochs(
     preload=True,
     verbose=True,
     reject = reject
-)
+).filter(10, 45, fir_design='firwin')  
 
 # --- Evoked Response ---
 evoked = epochs.average()  # Compute the evoked response
 evoked.plot(titles='Evoked Response', time_unit='s', spatial_colors=True)  # Plot the evoked response
+
+plot_asd_comparison_epochs(raw_filtered, epochs, picks=picks, title='ASD Before and After Epoch Rejection', fmax=100)
+
 
 #%% --- Time-Frequency Representation (TFR) ---
 def plot_tfr(tfr, evoked, vmin=-0.5e-25, vmax=2.0e-25, cmap='RdBu_r'):

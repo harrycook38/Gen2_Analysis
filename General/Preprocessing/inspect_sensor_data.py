@@ -5,21 +5,22 @@ import matplotlib.pyplot as plt
 import matplotlib
 matplotlib.use('QtAgg')  # Use TkAgg backend for interactive plotting
 import mne
+from matplotlib.colors import LogNorm
 
 
 #%%%
 
-file_name = '20250529_142407_sub-Ania_file-BRAINandUs1_raw.fif'
+file_name = 'mne_raw.fif'
 
-file_location = r'W:\Data\2025_05_29_Motor_and_FL\FL'
+file_location = r'W:\Data\2025_05_28_motor_new_mount\motor_1son_2soff_1_final_000\concat\mne_raw'
 
 fif_fname = os.path.join(file_location, file_name)
 
 l_freq = 3.0  # Low frequency for bandpass filter
 h_freq = 45.0  # High frequency for bandpass filter
 
-generate_filtered_fif = False  # Set to True to generate the filtered .fif file in same directory as the raw .fif file
-sens_type = 1  # 0 for NMOR, 1 for Fieldline
+generate_filtered_fif = True  # Set to True to generate the filtered .fif file in same directory as the raw .fif file
+sens_type = 0  # 0 for NMOR, 1 for Fieldline
 
 #%% --- Load + Process Raw in MNE ---
 # Load the raw object from the saved .fif file
@@ -55,16 +56,16 @@ def plot_spectrogram(raw_data, sfreq):
     f, t, Sxx = spectrogram(raw_data, fs=sfreq, nperseg=2048, noverlap=1024)
 
     # Convert to Amplitude Spectral Density (sqrt of PSD)
-    ASD = np.sqrt(Sxx)/1e-12  # Convert to picotesla/√Hz
+    ASD = np.sqrt(Sxx)  # Convert to picotesla/√Hz
     
-       # Plot ASD directly (linear scale, not dB)
+    # Plot ASD directly (linear scale, not dB)
     plt.figure(figsize=(12, 5))
-    plt.pcolormesh(t, f, ASD, shading='gouraud')
+    mesh = plt.pcolormesh(t, f, ASD, shading='gouraud', norm=LogNorm(vmin=ASD[ASD > 0].min(), vmax=ASD.max()))
     plt.ylim(0, 100)
-    plt.title('Spectrogram (Amplitude Spectral Density in picotesla/√Hz)')
+    plt.title('Spectrogram (Log-scaled ASD)')
     plt.ylabel('Frequency (Hz)')
     plt.xlabel('Time (s)')
-    plt.colorbar(label='Amplitude (pT/√Hz)')
+    plt.colorbar(mesh, label='Amplitude (T/√Hz)')
     plt.tight_layout()
     plt.show()
 
@@ -116,7 +117,7 @@ def plot_timecourse(unf, filt, times):
     plt.plot(times, filt.flatten(), label='Filtered', alpha=0.7)  # Plot the filtered data
     plt.title('Timecourse of B_field') 
     plt.xlabel('Time (s)') 
-    plt.ylabel('Amplitude')
+    plt.ylabel('Amplitude (pT)')
     plt.legend() 
     plt.grid(True)  
     plt.tight_layout()
@@ -125,7 +126,7 @@ def plot_timecourse(unf, filt, times):
 # Extract the data for the unfiltered and filtered timecourses and plot them
 unf, times = raw[picks]  # Unfiltered data for the 'B_field' channel
 filt, _ = raw_filtered[picks]  # Filtered data for the 'B_field' channel
-plot_timecourse(unf, filt, times)  # Plot the comparison of the unfiltered and filtered timecourses
+plot_timecourse(unf/1e-12, filt/1e-12, times)  # Plot the comparison of the unfiltered and filtered timecourses
 
 #%% --- Save the filtered raw data ---
 if generate_filtered_fif is True:
@@ -141,3 +142,5 @@ if generate_filtered_fif is True:
     raw_filtered.save(filtered_fif_path, overwrite=True)
     print(f"Filtered data saved to: {filtered_fif_path}")
 # %%
+
+

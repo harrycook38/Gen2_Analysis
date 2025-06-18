@@ -12,12 +12,12 @@ import matplotlib.gridspec as gridspec
 files = [
     {
         "label": "NMOR",
-        "path": r"W:\Data\2025_05_29_Motor_and_FL\Us\Motor_w_FL_1_000\concat\mne_raw\mne_raw_filtered_3-45Hz.fif",
+        "path": r"W:\Data\2025_05_29_Motor_and_FL\Us\Tom_motor_2_000\mne_raw\mne_raw_filtered_2-45Hz.fif",
         "sens_type": 0
     },
     {
         "label": "FieldLine",
-        "path": r"W:\Data\2025_05_29_Motor_and_FL\FL\processed\3-45Hz_20250529_142407_sub-Ania_file-BRAINandUs1_raw.fif",
+        "path": r"W:\Data\2025_05_29_Motor_and_FL\FL\processed\3-45Hz_20250529_171911_sub-Tom_file-BrainvsUs1wholehand_raw.fif",
         "sens_type": 1
     }
 ]
@@ -59,17 +59,17 @@ def process_dataset(file_path, sens_type):
     raw = mne.io.read_raw_fif(file_path, preload=True)
 
     if sens_type == 0:
-        events = mne.find_events(raw, stim_channel='trigin1', verbose=True)
+        events = mne.find_events(raw, stim_channel='trigin1', verbose=False)
         picks = mne.pick_channels(raw.info['ch_names'], include=['B_field'])
-        reject = dict(mag=4.5e-12)
+        reject = dict(mag=5e-12)
     else:
         events = detect_ttl_rising_edges(raw, channel_name='ai120', threshold=2.5)
         picks = mne.pick_channels(raw.info['ch_names'], include=['s69_bz'])
-        reject = dict(mag=3e-12)
+        reject = dict(mag=4e-12)
 
     epochs = mne.Epochs(
         raw, events, event_id=None, tmin=-0.5, tmax=2.0,
-        baseline=(-0.5, -0.1), detrend=1, picks=picks, preload=True, reject=reject
+        baseline=(-0.5, -0.1), detrend=1, picks=picks, preload=True, reject=reject,verbose=False
     )
 
     evoked = epochs.average()
@@ -78,9 +78,19 @@ def process_dataset(file_path, sens_type):
     n_cycles = frequencies / 3.0
     tfr = mne.time_frequency.tfr_multitaper(
         evoked, freqs=frequencies, n_cycles=n_cycles,
-        time_bandwidth=2.0, return_itc=False, n_jobs=1, average=False
+        time_bandwidth=2.0, return_itc=False, n_jobs=1, average=False, verbose=False
     )
     tfr.apply_baseline(baseline=(-0.5, -0.1), mode='mean')
+
+     # Drop stats here
+    n_total = len(epochs.drop_log)              # total trials (includes dropped and retained)
+    n_dropped = sum(len(x) > 0 for x in epochs.drop_log)  # only those with any reason in drop_log
+    n_retained = n_total - n_dropped
+    percent_rejected = 100 * n_dropped / n_total if n_total else 0
+
+    label = 'Fieldline' if sens_type == 1 else 'NMOR'
+    print(f"{label}: {n_dropped} of {n_total} trials rejected ({percent_rejected:.1f}% rejected)")
+
 
     return raw, epochs, evoked, tfr, frequencies, picks
 
@@ -95,27 +105,37 @@ for f in files:
 
 #%% plot spectra to compare
 plt.figure(figsize=(10, 6))
+
 for label, res in results.items():
     raw_data, epochs, picks = res["raw"], res["epochs"], res["picks"]
     sfreq = raw_data.info['sfreq']
+    
+    # --- Before Rejection ---
     data_before, _ = raw_data[picks]
     n_fft = min(round(10 * sfreq), data_before.shape[1])
     psds_before, freqs = psd_array_welch(data_before, sfreq=sfreq, fmin=0, fmax=100, n_fft=n_fft)
     asd_before = np.sqrt(psds_before)
     plt.plot(freqs, asd_before.T, alpha=0.5, label=f'{label} - Before')
 
+    # --- After Rejection ---
     data_after = epochs.get_data().transpose(1, 0, 2).reshape(len(picks), -1)
     n_fft = min(round(10 * sfreq), data_after.shape[1])
     psds_after, _ = psd_array_welch(data_after, sfreq=sfreq, fmin=0, fmax=100, n_fft=n_fft)
     asd_after = np.sqrt(psds_after)
     plt.plot(freqs, asd_after.T, alpha=0.8, label=f'{label} - After')
 
+    # --- Add Average Line (10–48 Hz) ---
+    freq_mask = (freqs >= 10) & (freqs <= 48)
+    mean_asd = asd_after[:, freq_mask].mean()
+    mean_ft = mean_asd * 1e15  # Convert from T/√Hz to fT/√Hz
+    plt.axhline(mean_asd, linestyle='--', color='grey', alpha=0.6,
+            label=f'{label} Mean 10–48 Hz ({mean_ft:.1f} fT/√Hz)')
 plt.yscale('log')
 plt.xlabel('Frequency (Hz)')
 plt.ylabel('Amplitude (T/√Hz)')
 plt.title('ASD Comparison Across Sensors')
 plt.legend()
-plt.grid(True)
+plt.grid(True, which='both', linestyle=':')
 plt.tight_layout()
 plt.show()
 

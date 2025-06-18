@@ -7,13 +7,13 @@ import matplotlib.pyplot as plt
 import mne
 
 #%% --- Constants ---
-file_name = 'mne_raw_filtered_3-45Hz.fif'
+file_name = '3-45Hz_20250529_142407_sub-Ania_file-BRAINandUs1_raw.fif'
 
-file_location = r'W:\Data\2025_05_28_motor_new_mount\motor_1son_2soff_1_final_000\concat\mne_raw'
+file_location = r'W:\Data\2025_05_29_Motor_and_FL\FL\processed'
 
 fif_fname = os.path.join(file_location, file_name)
 
-sens_type = 0 # 0 for NMOR, 1 for Fieldline
+sens_type = 1 # 0 for NMOR, 1 for Fieldline
 
 #%%
 #MNE doesn't like aux triggers sometimes, so we need to help it out with an edge-detection function
@@ -90,14 +90,13 @@ raw_filtered = mne.io.read_raw_fif(fif_fname, preload=True)  # Load the filtered
 if sens_type == 0:
     events = mne.find_events(raw_filtered, stim_channel='trigin1', verbose=True)
     picks = mne.pick_channels(raw_filtered.info['ch_names'], include=['B_field'])
+    reject = dict(mag=4.5e-12)  # Define rejection criteria for the magnetometer channel
 if sens_type == 1:
-
     events = detect_ttl_rising_edges(raw_filtered, channel_name='ai120', threshold=2.5)
     picks = mne.pick_channels(raw_filtered.info['ch_names'], include=['s69_bz'])
+    reject = dict(mag=3e-12)  # Define rejection criteria for the magnetometer channel
 
-# Pick the channels to process
 
-reject = dict(mag=4.5e-12)  # Define rejection criteria for the magnetometer channel
 epochs = mne.Epochs(
     raw_filtered, events, event_id=None,  # Use filtered data and event informatio
     tmin=-0.5, tmax=2.,
@@ -107,8 +106,7 @@ epochs = mne.Epochs(
     preload=True,
     verbose=True,
     reject = reject
-).filter(10, 45, fir_design='firwin')  
-
+)
 # --- Evoked Response ---
 evoked = epochs.average()  # Compute the evoked response
 evoked.plot(titles='Evoked Response', time_unit='s', spatial_colors=True)  # Plot the evoked response
@@ -141,7 +139,7 @@ def plot_tfr(tfr, evoked, vmin=-0.5e-25, vmax=2.0e-25, cmap='RdBu_r'):
     plt.show()
 
 # --- Time-frequency analysis parameters ---
-frequencies = np.linspace(2, 30, 100)  # Define the frequency range for TFR
+frequencies = np.linspace(10, 30, 100)  # Define the frequency range for TFR
 n_cycles = frequencies / 3.0  # Set the number of cycles for each frequency
 time_bandwidth = 2.0  # Time-bandwidth product for multitaper method
 

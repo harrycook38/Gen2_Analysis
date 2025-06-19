@@ -5,19 +5,28 @@ import matplotlib
 matplotlib.use('QtAgg')  # Use QtAgg backend for interactive plotting
 import matplotlib.pyplot as plt
 import mne
+
+mne.set_log_level("WARNING")
+
 from mne.time_frequency import psd_array_welch
 import matplotlib.gridspec as gridspec
 
 #%% Set MNE configuration
+NMOR_filename = 'mne_raw_filtered_2-45Hz.fif'
+NMOR_path = r"W:\Data\2025_05_29_Motor_and_FL\Us\Tom_motor_2_000\mne_raw"
+
+FL_filename = '3-45Hz_20250529_171911_sub-Tom_file-BrainvsUs1wholehand_raw.fif'
+FL_path = r"W:\Data\2025_05_29_Motor_and_FL\FL\processed"
+
 files = [
     {
         "label": "NMOR",
-        "path": r"W:\Data\2025_05_29_Motor_and_FL\Us\Tom_motor_2_000\mne_raw\mne_raw_filtered_2-45Hz.fif",
+        "path": os.path.join(NMOR_path, NMOR_filename),
         "sens_type": 0
     },
     {
         "label": "FieldLine",
-        "path": r"W:\Data\2025_05_29_Motor_and_FL\FL\processed\3-45Hz_20250529_171911_sub-Tom_file-BrainvsUs1wholehand_raw.fif",
+        "path": os.path.join(FL_path, FL_filename),
         "sens_type": 1
     }
 ]
@@ -50,7 +59,7 @@ def detect_ttl_rising_edges(raw, channel_name, threshold=2.5, min_interval=0.2, 
     events = np.column_stack((filtered, np.zeros(len(filtered), dtype=int), np.full(len(filtered), event_id)))
 
     if verbose:
-        print(f"Detected {len(events)} rising edge events in '{channel_name}'")
+        print(f"Detected {len(events)} rising edge events in '{channel_name}' for Fieldline")
 
     return events
 
@@ -61,6 +70,7 @@ def process_dataset(file_path, sens_type):
     if sens_type == 0:
         events = mne.find_events(raw, stim_channel='trigin1', verbose=False)
         picks = mne.pick_channels(raw.info['ch_names'], include=['B_field'])
+        print(f"Detected {len(events)} mne events in 'trigin1' for NMOR")
         reject = dict(mag=5e-12)
     else:
         events = detect_ttl_rising_edges(raw, channel_name='ai120', threshold=2.5)
@@ -113,7 +123,7 @@ for label, res in results.items():
     # --- Before Rejection ---
     data_before, _ = raw_data[picks]
     n_fft = min(round(10 * sfreq), data_before.shape[1])
-    psds_before, freqs = psd_array_welch(data_before, sfreq=sfreq, fmin=0, fmax=100, n_fft=n_fft)
+    psds_before, freqs = psd_array_welch(data_before, sfreq=sfreq, fmin=0, fmax=100, n_fft=n_fft,verbose=None)
     asd_before = np.sqrt(psds_before)
     plt.plot(freqs, asd_before.T, alpha=0.5, label=f'{label} - Before')
 

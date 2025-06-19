@@ -16,35 +16,6 @@ fif_fname = os.path.join(file_location, file_name)
 sens_type = 1 # 0 for NMOR, 1 for Fieldline
 
 #%%
-#MNE doesn't like aux triggers sometimes, so we need to help it out with an edge-detection function
-def detect_ttl_rising_edges(raw, channel_name, threshold=2.5, min_interval=0.2, event_id=1, verbose=True):
-    # Extract signal
-    signal = raw.get_data(picks=channel_name)[0]
-    sfreq = raw.info['sfreq']
-
-    # Find rising edges
-    above = signal > threshold
-    rising_edges = np.where(np.diff(above.astype(int)) == 1)[0] + 1  # +1 for shift
-
-    # Debounce (enforce minimum spacing between triggers)
-    if rising_edges.size == 0:
-        if verbose:
-            print(f"No rising edges found in channel '{channel_name}'.")
-        return np.empty((0, 3), dtype=int)
-
-    min_samples = int(sfreq * min_interval)
-    filtered = [rising_edges[0]]
-    for idx in rising_edges[1:]:
-        if idx - filtered[-1] > min_samples:
-            filtered.append(idx)
-
-    # Format events
-    events = np.column_stack((filtered, np.zeros(len(filtered), dtype=int), np.full(len(filtered), event_id)))
-
-    if verbose:
-        print(f"Detected {len(events)} rising edge events in '{channel_name}'")
-
-    return events
 
 from mne.time_frequency import psd_array_welch
 
@@ -92,7 +63,7 @@ if sens_type == 0:
     picks = mne.pick_channels(raw_filtered.info['ch_names'], include=['B_field'])
     reject = dict(mag=4.5e-12)  # Define rejection criteria for the magnetometer channel
 if sens_type == 1:
-    events = detect_ttl_rising_edges(raw_filtered, channel_name='ai120', threshold=2.5)
+    events = mne.find_events(raw_filtered, stim_channel='ai120', verbose=True, min_duration=0.0005,   output='onset', consecutive=True)
     picks = mne.pick_channels(raw_filtered.info['ch_names'], include=['s69_bz'])
     reject = dict(mag=3e-12)  # Define rejection criteria for the magnetometer channel
 

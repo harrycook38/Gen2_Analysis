@@ -34,7 +34,7 @@ if sens_type == 0:
     picks = mne.pick_channels(raw.info['ch_names'], include=['B_field'])
 if sens_type == 1:
     events = mne.find_events(raw, stim_channel='ai118', verbose=True)
-    picks = mne.pick_channels(raw.info['ch_names'], include=['s69_bz'])
+    picks = mne.pick_types(raw.info, meg=True)
 # Pick the channels to process]
 
 # Copy raw data to avoid modifying it
@@ -111,22 +111,28 @@ for title, dat in zip(["Unfiltered", f"Filtered"], [raw, raw_filtered]):
 
 # --- Timecourse Comparison ---
 def plot_timecourse(unf, filt, times):
-    # Create a figure for plotting the timecourse comparison
-    plt.figure(figsize=(15, 4))
-    plt.plot(times, unf.flatten(), label='Unfiltered', alpha=0.7)  # Plot the unfiltered data
-    plt.plot(times, filt.flatten(), label='Filtered', alpha=0.7)  # Plot the filtered data
-    plt.title('Timecourse of B_field') 
-    plt.xlabel('Time (s)') 
+    plt.figure(figsize=(15, 5))
+
+    # Plot unfiltered traces for all channels
+    for i in range(unf.shape[0]):
+        plt.plot(times, unf[i] / 1e-12, label=f'Unfiltered Ch{i+1}', alpha=0.5)
+
+    # Plot filtered traces for all channels
+    for i in range(filt.shape[0]):
+        plt.plot(times, filt[i] / 1e-12, label=f'Filtered Ch{i+1}', alpha=0.8)
+
+    plt.title('Timecourses for All Channels')
+    plt.xlabel('Time (s)')
     plt.ylabel('Amplitude (pT)')
-    plt.legend() 
-    plt.grid(True)  
+    plt.grid(True)
+    plt.legend(loc='upper right', ncol=2, fontsize='small')
     plt.tight_layout()
-    plt.show() 
+    plt.show()
 
 # Extract the data for the unfiltered and filtered timecourses and plot them
-unf, times = raw[picks]  # Unfiltered data for the 'B_field' channel
-filt, _ = raw_filtered[picks]  # Filtered data for the 'B_field' channel
-plot_timecourse(unf/1e-12, filt/1e-12, times)  # Plot the comparison of the unfiltered and filtered timecourses
+unf, times = raw[picks]
+filt, _ = raw_filtered[picks]
+plot_timecourse(unf, filt, times)
 
 #%% --- Save the filtered raw data ---
 if generate_filtered_fif is True:

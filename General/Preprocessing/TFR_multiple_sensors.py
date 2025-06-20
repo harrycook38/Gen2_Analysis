@@ -36,19 +36,18 @@ files = [
 def process_dataset(file_path, sens_type):
     raw = mne.io.read_raw_fif(file_path, preload=True)
 
-    if sens_type == 0:
+    if sens_type == 0:  # NMOR
         events = mne.find_events(raw, stim_channel='trigin1', verbose=False, output='onset', consecutive=True)
         picks = mne.pick_channels(raw.info['ch_names'], include=['B_field'])
         reject = dict(mag=5e-12)
-    else:
-        #events = detect_ttl_rising_edges(raw, channel_name='ai120', threshold=2.5)
+    else:  # FieldLine
         events = mne.find_events(raw, stim_channel='ai120', verbose=False, min_duration=0.0005, output='onset', consecutive=True)
-        picks = mne.pick_channels(raw.info['ch_names'], include=['s69_bz'])
+        picks = mne.pick_types(raw.info, meg=True)
         reject = dict(mag=4e-12)
 
     epochs = mne.Epochs(
         raw, events, event_id=None, tmin=-0.5, tmax=2.0,
-        baseline=(-0.5, -0.1), detrend=1, picks=picks, preload=True, reject=reject,verbose=False
+        baseline=(-0.5, -0.1), detrend=1, picks=picks, preload=True, reject=reject, verbose=False
     )
 
     evoked = epochs.average()
@@ -61,14 +60,30 @@ def process_dataset(file_path, sens_type):
     )
     tfr.apply_baseline(baseline=(-0.5, -0.1), mode='mean')
 
-     # Drop stats here
-    n_total = len(epochs.drop_log)              # total trials (includes dropped and retained)
-    n_dropped = sum(len(x) > 0 for x in epochs.drop_log)  # only those with any reason in drop_log
-    n_retained = n_total - n_dropped
+    # --- Drop stats summary ---
+    label = 'Fieldline' if sens_type == 1 else 'NMOR'
+    n_total = len(epochs.drop_log)
+    n_dropped = sum(len(x) > 0 for x in epochs.drop_log)
     percent_rejected = 100 * n_dropped / n_total if n_total else 0
 
-    label = 'Fieldline' if sens_type == 1 else 'NMOR'
-    print(f"{label}: {n_dropped} of {n_total} trials rejected ({percent_rejected:.1f}% rejected)")
+    print(f"\n{label}: {n_dropped} of {n_total} trials rejected ({percent_rejected:.1f}% rejected overall)")
+
+    # Count how many times each channel caused a drop (may sum to > n_dropped)
+    ch_names = [raw.ch_names[i] for i in picks]
+    drop_counts = {ch: 0 for ch in ch_names}
+
+    for log_entry in epochs.drop_log:
+        for reason in log_entry:
+            for ch in ch_names:
+                if ch in reason:
+                    drop_counts[ch] += 1
+
+    # Only print channels that actually caused a rejection
+    contributing_sensors = {ch: count for ch, count in drop_counts.items() if count > 0}
+    if contributing_sensors:
+        print(f"\n{label} - Drop counts per sensor (note: one epoch may be dropped due to multiple sensors):")
+        for ch, count in sorted(contributing_sensors.items()):
+            print(f"  {ch}: {count} dropped epochs")
 
     return raw, epochs, evoked, tfr, frequencies, picks
 
@@ -82,53 +97,71 @@ for f in files:
     }
 
 #%% plot spectra to compare
-plt.figure(figsize=(10, 6))
+plt.figure(figsize=(12, 7))
 
 for label, res in results.items():
     raw_data, epochs, picks = res["raw"], res["epochs"], res["picks"]
     sfreq = raw_data.info['sfreq']
-    
+    ch_names = [raw_data.ch_names[p] for p in picks]
+
+    n_sensors = len(picks)
+    colors = plt.cm.get_cmap('tab10', n_sensors)  # distinct colors
+
     # --- Before Rejection ---
     data_before, _ = raw_data[picks]
     n_fft = min(round(10 * sfreq), data_before.shape[1])
-    psds_before, freqs = psd_array_welch(data_before, sfreq=sfreq, fmin=0, fmax=100, n_fft=n_fft,verbose=None)
+    psds_before, freqs = psd_array_welch(data_before, sfreq=sfreq, fmin=0, fmax=100, n_fft=n_fft, verbose=None)
     asd_before = np.sqrt(psds_before)
-    plt.plot(freqs, asd_before.T, alpha=0.5, label=f'{label} - Before')
+
+    for i in range(n_sensors):
+        plt.plot(freqs, asd_before[i], alpha=0.5, color=colors(i), linestyle='-', 
+                 label=f'{label} {ch_names[i]} Before')
 
     # --- After Rejection ---
-    data_after = epochs.get_data().transpose(1, 0, 2).reshape(len(picks), -1)
+    data_after = epochs.get_data().transpose(1, 0, 2).reshape(n_sensors, -1)
     n_fft = min(round(10 * sfreq), data_after.shape[1])
     psds_after, _ = psd_array_welch(data_after, sfreq=sfreq, fmin=0, fmax=100, n_fft=n_fft)
     asd_after = np.sqrt(psds_after)
-    plt.plot(freqs, asd_after.T, alpha=0.8, label=f'{label} - After')
 
-    # --- Add Average Line (10–48 Hz) ---
-    freq_mask = (freqs >= 10) & (freqs <= 48)
-    mean_asd = asd_after[:, freq_mask].mean()
-    mean_ft = mean_asd * 1e15  # Convert from T/√Hz to fT/√Hz
-    plt.axhline(mean_asd, linestyle='--', color='grey', alpha=0.6,
-            label=f'{label} Mean 10–48 Hz ({mean_ft:.1f} fT/√Hz)')
+    for i in range(n_sensors):
+        plt.plot(freqs, asd_after[i], alpha=0.8, color=colors(i), linestyle='--', 
+                 label=f'{label} {ch_names[i]} After')
+
+        # Per-sensor mean line (10–48 Hz)
+        freq_mask = (freqs >= 10) & (freqs <= 48)
+        mean_asd_band = asd_after[i, freq_mask].mean()
+        mean_ft = mean_asd_band * 1e15
+        plt.axhline(mean_asd_band, linestyle=':', color=colors(i), alpha=0.7,
+                    label=f'{label} {ch_names[i]} Mean 10–48 Hz ({mean_ft:.1f} fT/√Hz)')
+
 plt.yscale('log')
 plt.xlabel('Frequency (Hz)')
 plt.ylabel('Amplitude (T/√Hz)')
-plt.title('ASD Comparison Across Sensors')
-plt.legend()
+plt.title('ASD Comparison Across Sensors (Individual with Per-Sensor Mean Lines)')
+plt.legend(loc='upper right', fontsize='small', ncol=2)
 plt.grid(True, which='both', linestyle=':')
 plt.tight_layout()
 plt.show()
 
-#%% Plot evoked responses
-plt.figure(figsize=(10, 5))
+#%% Plot evoked responses (all sensor traces, all labels shown)
+plt.figure(figsize=(14, 7))
+
 for label, res in results.items():
     evoked = res["evoked"]
-    plt.plot(evoked.times, evoked.data[0], label=label)
-plt.title('Evoked Response Comparison')
+    ch_names = evoked.ch_names
+
+    for i, ch in enumerate(ch_names):
+        trace_label = f'{label} - {ch}'
+        plt.plot(evoked.times, evoked.data[i] * 1e15, alpha=0.7, label=trace_label)
+
+plt.title('Evoked Responses: All Sensor Traces')
 plt.xlabel('Time (s)')
-plt.ylabel('Amplitude (T)')
-plt.legend()
+plt.ylabel('Amplitude (fT)')
+plt.legend(fontsize='small', ncol=2)  # Adjust ncol or fontsize as needed
 plt.grid(True)
 plt.tight_layout()
 plt.show()
+
 
 #%% TFRs, requires custom plotting due to multiple subplots
 fig = plt.figure(figsize=(14, 6))
@@ -141,7 +174,10 @@ for ax, (label, res) in zip(axs, results.items()):
     tfr = res["tfr"]
     evoked = res["evoked"]
     freqs = res["frequencies"]
-    power = tfr.data[0].squeeze()
+    picks = res["picks"]
+    # Average across sensors (axis=0)
+    power = tfr.data[picks].mean(axis=0).squeeze()
+
     mesh = ax.pcolormesh(
         evoked.times,
         freqs,
@@ -155,8 +191,6 @@ for ax, (label, res) in zip(axs, results.items()):
     ax.set_xlabel('Time (s)')
     ax.set_ylabel('Frequency (Hz)')
 
-# Properly attach the colorbar to its own axis
 fig.colorbar(mesh, cax=cax, label='Power')
-
 plt.tight_layout()
 plt.show()

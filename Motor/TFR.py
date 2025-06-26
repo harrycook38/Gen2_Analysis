@@ -7,9 +7,9 @@ import matplotlib.pyplot as plt
 import mne
 
 #%% --- Constants ---
-file_name = '3-45Hz_20250529_142407_sub-Ania_file-BRAINandUs1_raw.fif'
+file_name = '3-45Hz_20250625_174902_sub-LEDnew_file-Test1fiber_raw.fif'
 
-file_location = r'W:\Data\2025_05_29_Motor_and_FL\FL\processed'
+file_location = r'W:\Data\2025_06_25_TestLED-2\processed'
 
 fif_fname = os.path.join(file_location, file_name)
 
@@ -63,9 +63,9 @@ if sens_type == 0:
     picks = mne.pick_channels(raw_filtered.info['ch_names'], include=['B_field'])
     reject = dict(mag=4.5e-12)  # Define rejection criteria for the magnetometer channel
 if sens_type == 1:
-    events = mne.find_events(raw_filtered, stim_channel='ai120', verbose=True, min_duration=0.0005,   output='onset', consecutive=True)
+    events = mne.find_events(raw_filtered, stim_channel='ai113', verbose=True, min_duration=0.005,   output='onset', consecutive=True)
     picks = mne.pick_channels(raw_filtered.info['ch_names'], include=['s69_bz'])
-    reject = dict(mag=3e-12)  # Define rejection criteria for the magnetometer channel
+    reject = dict(mag=10e-12)  # Define rejection criteria for the magnetometer channel
 
 
 epochs = mne.Epochs(

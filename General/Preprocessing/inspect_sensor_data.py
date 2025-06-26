@@ -10,9 +10,9 @@ from matplotlib.colors import LogNorm
 
 #%%%
 
-file_name = '20250529_171911_sub-Tom_file-BrainvsUs1wholehand_raw.fif'
+file_name = '20250626_113953_sub-VoltCheck_file-5VFLDigitalGradON_raw.fif'
 
-file_location = r'W:\Data\2025_05_29_Motor_and_FL\FL'
+file_location = r'W:\Data\2025_loop_testing'
 
 fif_fname = os.path.join(file_location, file_name)
 
@@ -20,7 +20,7 @@ l_freq = 3.0  # Low frequency for bandpass filter
 h_freq = 45.0  # High frequency for bandpass filter
 
 generate_filtered_fif = True  # Set to True to generate the filtered .fif file in same directory as the raw .fif file
-sens_type = 1  # 0 for NMOR, 1 for Fieldline
+sens_type = 2  # 0 for NMOR, 1 for Fieldline, 2 for Fieldline with DiN
 
 #%% --- Load + Process Raw in MNE ---
 # Load the raw object from the saved .fif file
@@ -33,8 +33,11 @@ if sens_type == 0:
     events = mne.find_events(raw, stim_channel='trigin1', verbose=True)
     picks = mne.pick_channels(raw.info['ch_names'], include=['B_field'])
 if sens_type == 1:
-    events = mne.find_events(raw, stim_channel='ai118', verbose=True)
-    picks = mne.pick_types(raw.info, meg=True)
+    events = mne.find_events(raw, stim_channel='ai113', verbose=True, min_duration=0.0005,   output='onset', consecutive=True)
+    picks = mne.pick_channels(raw.info['ch_names'], include=['s69_bz'])
+if sens_type == 2:
+    events = mne.find_events(raw, stim_channel='di32', verbose=True, min_duration=0.0005, output='onset', consecutive=True)
+    picks = mne.pick_channels(raw.info['ch_names'], include=['s69_bz'])
 # Pick the channels to process]
 
 # Copy raw data to avoid modifying it

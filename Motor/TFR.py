@@ -7,13 +7,13 @@ import matplotlib.pyplot as plt
 import mne
 
 #%% --- Constants ---
-file_name = '3-45Hz_20250625_174902_sub-LEDnew_file-Test1fiber_raw.fif'
+file_name = '3-45Hz_20250626_155728_sub-Harry_file-HBraintest1_raw.fif'
 
-file_location = r'W:\Data\2025_06_25_TestLED-2\processed'
+file_location = r'W:\Data\2025_06_26_Brain\processed'
 
 fif_fname = os.path.join(file_location, file_name)
 
-sens_type = 1 # 0 for NMOR, 1 for Fieldline
+sens_type = 2 # 0 for NMOR, 1 for Fieldline, 2 for Fieldline with DiN
 
 #%%
 
@@ -55,7 +55,6 @@ def plot_asd_comparison_epochs(raw_data, epochs, picks, title='ASD Before and Af
     plt.tight_layout()
     plt.show()
 
-
 raw_filtered = mne.io.read_raw_fif(fif_fname, preload=True)  # Load the filtered raw data
 
 if sens_type == 0:
@@ -63,10 +62,47 @@ if sens_type == 0:
     picks = mne.pick_channels(raw_filtered.info['ch_names'], include=['B_field'])
     reject = dict(mag=4.5e-12)  # Define rejection criteria for the magnetometer channel
 if sens_type == 1:
-    events = mne.find_events(raw_filtered, stim_channel='ai113', verbose=True, min_duration=0.005,   output='onset', consecutive=True)
-    picks = mne.pick_channels(raw_filtered.info['ch_names'], include=['s69_bz'])
-    reject = dict(mag=10e-12)  # Define rejection criteria for the magnetometer channel
+    events = mne.find_events(raw_filtered, stim_channel='ai113', verbose=True, min_duration=0.0005, output='onset', consecutive=True)
+    if len(events) > 500: #MNE sometimes misidentifies events on analog, so we must create our own function
+        # Get the raw signal from the stim channel
+        data, times = raw_filtered.copy().pick('ai113').get_data(return_times=True)
+        signal = data[0]
 
+        # Optional: smooth the signal (e.g., with a moving average)
+        from scipy.ndimage import uniform_filter1d
+        smoothed = uniform_filter1d(signal, size=100)  # adjust size based on sampling rate
+
+        # Threshold to binary
+        threshold = 0.5  # adjust this manually based on inspection
+        binary = smoothed > threshold
+
+        # Detect rising edges (onset of bursts)
+        rising = np.where(np.diff(binary.astype(int)) == 1)[0]
+
+        # Optionally: debounce by keeping only the first in each 1-second window
+        fs = int(raw_filtered.info['sfreq'])
+        min_interval = fs  # 1 second minimum between events
+        clean_rising = [rising[0]]
+        for r in rising[1:]:
+            if r - clean_rising[-1] > min_interval:
+                clean_rising.append(r)
+        clean_rising = np.array(clean_rising)
+
+        # Create MNE-style events array
+        events = np.column_stack([
+            clean_rising,
+            np.zeros_like(clean_rising),
+            np.ones_like(clean_rising, dtype=int)  # event ID = 1
+        ])
+        print(f"Detected {len(clean_rising)} events after cleaning.")
+else:       
+
+    picks = mne.pick_channels(raw_filtered.info['ch_names'], include=['s69_bz'])
+    reject = dict(mag=3.8e-12)  # Define rejection criteria for the magnetometer channel
+
+if sens_type == 2:
+    events = mne.find_events(raw_filtered, stim_channel='di32', verbose=True, min_duration=0.0005, output='onset', consecutive=True)
+    picks = mne.pick_channels(raw_filtered.info['ch_names'], include=['s69_bz'])
 
 epochs = mne.Epochs(
     raw_filtered, events, event_id=None,  # Use filtered data and event informatio
@@ -86,16 +122,16 @@ plot_asd_comparison_epochs(raw_filtered, epochs, picks=picks, title='ASD Before 
 
 
 #%% --- Time-Frequency Representation (TFR) ---
-def plot_tfr(tfr, evoked, vmin=-0.5e-25, vmax=2.0e-25, cmap='RdBu_r'):
-    # Extract power data for the first condition (tfr.data[0])
-    power = tfr.data[0]
-    power = power.squeeze()  # Collapse singleton dimensions for correct shape (100, 587)
+def plot_tfr(tfr, channel_idx=0, vmin=None, vmax=None, cmap='RdBu_r'):
+    power = tfr.data[channel_idx]
+    if vmin is None or vmax is None:
+        vmin = np.percentile(power, 1)
+        vmax = np.percentile(power, 99)
 
-    # Create a plot for the time-frequency representation
     plt.figure(figsize=(10, 6))
     mesh = plt.pcolormesh(
-        evoked.times,
-        frequencies,
+        tfr.times,
+        tfr.freqs,
         power,
         shading='auto',
         vmin=vmin,
@@ -103,31 +139,31 @@ def plot_tfr(tfr, evoked, vmin=-0.5e-25, vmax=2.0e-25, cmap='RdBu_r'):
         cmap=cmap
     )
     plt.colorbar(mesh, label='Power')
-    plt.title('TFR (Multitaper)')
+    plt.title(f'TFR (Multitaper) - {tfr.ch_names[channel_idx]}')
     plt.xlabel('Time (s)')
     plt.ylabel('Frequency (Hz)')
     plt.tight_layout()
     plt.show()
-
 # --- Time-frequency analysis parameters ---
 frequencies = np.linspace(10, 30, 100)  # Define the frequency range for TFR
 n_cycles = frequencies / 3.0  # Set the number of cycles for each frequency
 time_bandwidth = 2.0  # Time-bandwidth product for multitaper method
 
+# Compute TFR
 tfr = mne.time_frequency.tfr_multitaper(
-    evoked,
+    epochs,
     freqs=frequencies,
     n_cycles=n_cycles,
     time_bandwidth=time_bandwidth,
     return_itc=False,
-    n_jobs=1, 
-    average=False,  # Return individual TFR values (no averaging across trials)
+    average=True,  # average over epochs
+    n_jobs=-1
 )
 
-# Apply baseline correction: using the mean of the pre-stimulus period
-tfr.apply_baseline(baseline=(-0.5,-0.1), mode='mean')
+# Baseline correct
+tfr.apply_baseline(baseline=(-0.5, -0.1), mode='mean')
 
-# Plot the time-frequency representation
-plot_tfr(tfr, evoked)
+# Plot channel 0 (or any other)
+plot_tfr(tfr, channel_idx=0)
 
 # %%

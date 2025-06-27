@@ -10,9 +10,9 @@ from matplotlib.colors import LogNorm
 
 #%%%
 
-file_name = '20250626_113953_sub-VoltCheck_file-5VFLDigitalGradON_raw.fif'
+file_name = '20250626_155728_sub-Harry_file-HBraintest1_raw.fif'
 
-file_location = r'W:\Data\2025_loop_testing'
+file_location = r'W:\Data\2025_06_26_Brain'
 
 fif_fname = os.path.join(file_location, file_name)
 
@@ -143,7 +143,7 @@ if generate_filtered_fif is True:
     if sens_type == 0:
         filtered_file_name = f'mne_raw_filtered_{int(l_freq)}-{int(h_freq)}Hz.fif'
         filtered_fif_path = os.path.join(file_location, filtered_file_name)
-    if sens_type == 1:
+    if sens_type in (1,2):
         filtered_file_name = f'{int(l_freq)}-{int(h_freq)}Hz_' + file_name
         filtered_fif_path = os.path.join(file_location+'\processed', filtered_file_name)
 

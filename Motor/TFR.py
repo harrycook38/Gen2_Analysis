@@ -7,13 +7,13 @@ import matplotlib.pyplot as plt
 import mne
 
 #%% --- Constants ---
-file_name = '3-45Hz_20250626_155728_sub-Harry_file-HBraintest1_raw.fif'
+file_name = 'mne_raw_filtered_3-45Hz.fif'
 
-file_location = r'W:\Data\2025_06_26_Brain\processed'
+file_location = r'W:\Data\2025_07_01_Sensor_retest\reup_empty_room_000\concat\mne_raw'
 
 fif_fname = os.path.join(file_location, file_name)
 
-sens_type = 2 # 0 for NMOR, 1 for Fieldline, 2 for Fieldline with DiN
+sens_type = 0 # 0 for NMOR, 1 for Fieldline, 2 for Fieldline with DiN
 
 #%%
 
@@ -60,49 +60,48 @@ raw_filtered = mne.io.read_raw_fif(fif_fname, preload=True)  # Load the filtered
 if sens_type == 0:
     events = mne.find_events(raw_filtered, stim_channel='trigin1', verbose=True)
     picks = mne.pick_channels(raw_filtered.info['ch_names'], include=['B_field'])
-    reject = dict(mag=4.5e-12)  # Define rejection criteria for the magnetometer channel
-if sens_type == 1:
+    reject = dict(mag=4.5e-12)
+
+elif sens_type == 1:
     events = mne.find_events(raw_filtered, stim_channel='ai113', verbose=True, min_duration=0.0005, output='onset', consecutive=True)
-    if len(events) > 500: #MNE sometimes misidentifies events on analog, so we must create our own function
+    if len(events) > 500:
         # Get the raw signal from the stim channel
         data, times = raw_filtered.copy().pick('ai113').get_data(return_times=True)
         signal = data[0]
 
-        # Optional: smooth the signal (e.g., with a moving average)
+        # Smooth and threshold
         from scipy.ndimage import uniform_filter1d
-        smoothed = uniform_filter1d(signal, size=100)  # adjust size based on sampling rate
-
-        # Threshold to binary
-        threshold = 0.5  # adjust this manually based on inspection
+        smoothed = uniform_filter1d(signal, size=100)
+        threshold = 0.5
         binary = smoothed > threshold
 
-        # Detect rising edges (onset of bursts)
+        # Detect rising edges
         rising = np.where(np.diff(binary.astype(int)) == 1)[0]
 
-        # Optionally: debounce by keeping only the first in each 1-second window
+        # Debounce
         fs = int(raw_filtered.info['sfreq'])
-        min_interval = fs  # 1 second minimum between events
+        min_interval = fs
         clean_rising = [rising[0]]
         for r in rising[1:]:
             if r - clean_rising[-1] > min_interval:
                 clean_rising.append(r)
         clean_rising = np.array(clean_rising)
 
-        # Create MNE-style events array
         events = np.column_stack([
             clean_rising,
             np.zeros_like(clean_rising),
-            np.ones_like(clean_rising, dtype=int)  # event ID = 1
+            np.ones_like(clean_rising, dtype=int)
         ])
         print(f"Detected {len(clean_rising)} events after cleaning.")
-else:       
 
     picks = mne.pick_channels(raw_filtered.info['ch_names'], include=['s69_bz'])
-    reject = dict(mag=3.8e-12)  # Define rejection criteria for the magnetometer channel
+    reject = dict(mag=3.8e-12)
 
-if sens_type == 2:
+elif sens_type == 2:
     events = mne.find_events(raw_filtered, stim_channel='di32', verbose=True, min_duration=0.0005, output='onset', consecutive=True)
     picks = mne.pick_channels(raw_filtered.info['ch_names'], include=['s69_bz'])
+    reject = dict(mag=3.8e-12)
+
 
 epochs = mne.Epochs(
     raw_filtered, events, event_id=None,  # Use filtered data and event informatio
@@ -164,6 +163,6 @@ tfr = mne.time_frequency.tfr_multitaper(
 tfr.apply_baseline(baseline=(-0.5, -0.1), mode='mean')
 
 # Plot channel 0 (or any other)
-plot_tfr(tfr, channel_idx=0)
+plot_tfr(tfr, channel_idx=0,vmin=-2e-24, vmax=2e-24, cmap='RdBu_r')
 
 # %%

@@ -10,9 +10,9 @@ from matplotlib.colors import LogNorm
 
 #%%%
 
-file_name = '20250626_155728_sub-Harry_file-HBraintest1_raw.fif'
+file_name = 'mne_raw.fif'
 
-file_location = r'W:\Data\2025_06_26_Brain'
+file_location = r'W:\Data\2025_07_01_Sensor_retest\reup_empty_room_000\concat\mne_raw'
 
 fif_fname = os.path.join(file_location, file_name)
 
@@ -20,7 +20,7 @@ l_freq = 3.0  # Low frequency for bandpass filter
 h_freq = 45.0  # High frequency for bandpass filter
 
 generate_filtered_fif = True  # Set to True to generate the filtered .fif file in same directory as the raw .fif file
-sens_type = 2  # 0 for NMOR, 1 for Fieldline, 2 for Fieldline with DiN
+sens_type = 0  # 0 for NMOR, 1 for Fieldline, 2 for Fieldline with DiN
 
 #%% --- Load + Process Raw in MNE ---
 # Load the raw object from the saved .fif file

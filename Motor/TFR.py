@@ -9,7 +9,7 @@ import mne
 #%% --- Constants ---
 file_name = 'mne_raw_filtered_3-45Hz.fif'
 
-file_location = r'W:\Data\2025_07_01_Sensor_retest\reup_empty_room_000\concat\mne_raw'
+file_location = r'W:\Data\2025_07_03_brain1_harry\daq_harry_1_000\concat\mne_raw'
 
 fif_fname = os.path.join(file_location, file_name)
 
@@ -33,19 +33,28 @@ def plot_asd_comparison_epochs(raw_data, epochs, picks, title='ASD Before and Af
     # --- After rejection ---
     epochs_data = epochs.get_data()  # shape: (n_epochs, n_channels, n_times)
     n_epochs, n_channels, n_times = epochs_data.shape
-
-    # Reshape to (n_channels, n_epochs * n_times) to mimic continuous signal
     data_after = epochs_data.transpose(1, 0, 2).reshape(n_channels, n_epochs * n_times)
-    n_fft = min(round(10 * sfreq), data_after.shape[1])  # update n_fft again
+    n_fft = min(round(10 * sfreq), data_after.shape[1])
     psds_after, _ = psd_array_welch(
         data_after, sfreq=sfreq, fmin=0, fmax=fmax, n_fft=n_fft
     )
     asd_after = np.sqrt(psds_after)
 
+    # --- Noise floor between 2-40 Hz ---
+    freq_mask = (freqs >= 2) & (freqs <= 40)
+    noise_floor_before = np.median(asd_before[:, freq_mask])
+    noise_floor_after = np.median(asd_after[:, freq_mask])
+
     # --- Plot ---
     plt.figure(figsize=(10, 5))
     plt.plot(freqs, asd_before.T, alpha=0.4, label='Before Rejection')
     plt.plot(freqs, asd_after.T, alpha=0.6, label='After Rejection')
+
+     # Horizontal lines for noise floors with values in legend
+    plt.axhline(noise_floor_before, color='blue', linestyle='--', linewidth=2,
+                label=f'Noise Floor Before (2–40 Hz): {noise_floor_before:.1e}')
+    plt.axhline(noise_floor_after, color='orange', linestyle='--', linewidth=2,
+                label=f'Noise Floor After (2–40 Hz): {noise_floor_after:.1e}')
     plt.yscale('log')
     plt.grid(True)
     plt.title(title)
@@ -163,6 +172,6 @@ tfr = mne.time_frequency.tfr_multitaper(
 tfr.apply_baseline(baseline=(-0.5, -0.1), mode='mean')
 
 # Plot channel 0 (or any other)
-plot_tfr(tfr, channel_idx=0,vmin=-2e-24, vmax=2e-24, cmap='RdBu_r')
+plot_tfr(tfr, channel_idx=0, cmap='RdBu_r')
 
 # %%

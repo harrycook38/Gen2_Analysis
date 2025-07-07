@@ -12,7 +12,7 @@ from matplotlib.colors import LogNorm
 
 file_name = 'mne_raw.fif'
 
-file_location = r'W:\Data\2025_07_01_Sensor_retest\reup_empty_room_000\concat\mne_raw'
+file_location = r'W:\Data\2025_07_04_noise\daq_000\concat\mne_raw'
 
 fif_fname = os.path.join(file_location, file_name)
 
@@ -43,7 +43,11 @@ if sens_type == 2:
 # Copy raw data to avoid modifying it
 raw_filtered = raw.copy()
 # Apply Notch Filter to raw_filtered (but not raw)
-raw_filtered.notch_filter(freqs=[50, 100], picks=picks, filter_length='auto', trans_bandwidth=8, verbose=True)
+raw_filtered.notch_filter(freqs=[50], picks=picks,
+                          notch_widths=6,  # Width = full stopband, not transition
+                          trans_bandwidth=1,
+                          verbose=True)
+
 # Apply Butterworth Bandpass Filter to the same raw_filtered data
 raw_filtered.filter(
     l_freq=l_freq, h_freq=h_freq, method='iir',

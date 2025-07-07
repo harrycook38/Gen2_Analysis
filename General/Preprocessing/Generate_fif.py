@@ -6,10 +6,10 @@ import mne
 
 #%% --- Constants ---
 # Set the base directory where the data files are stored
-base_directory = r'W:\Data\2025_07_01_Sensor_retest\reup_empty_room_000'
+base_directory = r'W:\Data\2025_07_04_noise\daq_000'
 
 # Set the output directory where the processed MNE Raw file will be saved
-output_directory = r'W:\Data\2025_07_01_Sensor_retest\reup_empty_room_000\concat\mne_raw'
+output_directory = r'W:\Data\2025_07_04_noise\daq_000\concat\mne_raw'
 
 # Extract the folder name from the path for use in filenames later
 folder_name = os.path.basename(base_directory)

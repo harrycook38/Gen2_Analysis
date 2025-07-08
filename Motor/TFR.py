@@ -7,13 +7,13 @@ import matplotlib.pyplot as plt
 import mne
 
 #%% --- Constants ---
-file_name = '3-45Hz_20250626_155728_sub-Harry_file-HBraintest1_raw.fif'
+file_name = 'mne_raw_filtered_3-45Hz.fif'
 
-file_location = r'W:\Data\2025_06_26_Brain\processed'
+file_location = r'W:\Data\2025_7_7_empty_room\brain_FL-on_000\concat\mne_raw'
 
 fif_fname = os.path.join(file_location, file_name)
 
-sens_type = 2 # 0 for NMOR, 1 for Fieldline, 2 for Fieldline with DiN
+sens_type = 0 # 0 for NMOR, 1 for Fieldline, 2 for Fieldline with DiN
 
 perm_test = False # Set to True to run the cluster-based permutation test
 
@@ -71,7 +71,7 @@ raw_filtered = mne.io.read_raw_fif(fif_fname, preload=True)  # Load the filtered
 if sens_type == 0:
     events = mne.find_events(raw_filtered, stim_channel='trigin1', verbose=True)
     picks = mne.pick_channels(raw_filtered.info['ch_names'], include=['B_field'])
-    reject = dict(mag=4.5e-12)
+    reject = dict(mag=5.5e-12)
 
 elif sens_type == 1:
     events = mne.find_events(raw_filtered, stim_channel='ai113', verbose=True, min_duration=0.0005, output='onset', consecutive=True)
@@ -117,13 +117,13 @@ elif sens_type == 2:
 epochs = mne.Epochs(
     raw_filtered, events, event_id=None,  # Use filtered data and event informatio
     tmin=-0.5, tmax=3,
-    baseline=(-0.4, -0.05),
+    baseline=(-0.3, -0.05),
     detrend=1, 
     picks=picks,  # Select the channels for analysis (e.g., 'B_field')
     preload=True,
     verbose=True,
     reject = reject
-)
+).filter(l_freq=10, h_freq=45, method='iir', iir_params=dict(order=4, ftype='butter'))  # Apply bandpass filter
 # --- Evoked Response ---
 evoked = epochs.average()  # Compute the evoked response
 evoked.plot(titles='Evoked Response', time_unit='s', spatial_colors=True)  # Plot the evoked response
@@ -171,7 +171,7 @@ tfr = mne.time_frequency.tfr_multitaper(
 )
 
 # Baseline correct
-# tfr = tfr.apply_baseline(baseline=(-0.4, -0.1), mode='mean')
+tfr = tfr.apply_baseline(baseline=(-0.2, -0.1), mode='mean')
 
 # Plot channel 0 (or any other)
 plot_tfr(tfr, channel_idx=0, cmap='RdBu_r')#, vmin=-0.25e-24, vmax=1.1e-24)

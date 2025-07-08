@@ -6,10 +6,10 @@ import mne
 
 #%% --- Constants ---
 # Set the base directory where the data files are stored
-base_directory = r'W:\Data\2025_7_7_empty_room\brain_FL-on_000'
+base_directory = r'W:\Data\2025_07_08-H_brain\braingrad1_000\concat'
 
 # Set the output directory where the processed MNE Raw file will be saved
-output_directory = r'W:\Data\2025_7_7_empty_room\brain_FL-on_000\concat\mne_raw'
+output_directory = r'W:\Data\2025_07_08-H_brain\braingrad1_000\concat\mne_raw'
 
 # Extract the folder name from the path for use in filenames later
 folder_name = os.path.basename(base_directory)
@@ -137,14 +137,30 @@ for entry in folder_data[folder_name].values():
 
 #%% --- Build Raw object ---
 def build_raw(data_dict, ch_names, ch_types, sfreq):
-    # Stack the data from each channel (B_field, trigin1) into a 2D numpy array.
-    # The slicing[:, 2] selects the third column (signal) from each channel's data.
-    data = np.vstack([data_dict[ch]['data'][:, 2] for ch in ch_names])
+    # Extract the signal (3rd column) for each channel
+    channel_signals = [data_dict[ch]['data'][:, 2] for ch in ch_names]
     
-    # Create info structure for MNE Raw object. It contains channel names, types, and sampling frequency.
+    # Get original lengths for reporting
+    original_lengths = {ch: data_dict[ch]['data'].shape[0] for ch in ch_names}
+    
+    # Find the minimum length across all channels
+    min_len = min(original_lengths.values())
+    
+    # Truncate all signals to the minimum length, printing how many values are truncated
+    truncated_signals = []
+    for ch, sig in zip(ch_names, channel_signals):
+        n_truncated = len(sig) - min_len
+        if n_truncated > 0:
+            print(f"Channel '{ch}' truncated by {n_truncated} samples (from {len(sig)} to {min_len})")
+        truncated_signals.append(sig[:min_len])
+    
+    # Stack into (n_channels x n_times)
+    data = np.vstack(truncated_signals)
+    
+    # Create MNE info structure
     info = mne.create_info(ch_names=ch_names, sfreq=sfreq, ch_types=ch_types)
     
-    # Return the Raw object with the data and info.
+    # Return the Raw object
     return mne.io.RawArray(data, info)
 
 # Channel names and types for MNE Raw object creation, we cast our gradiometer to the 'mag' channel for 'b' units

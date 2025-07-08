@@ -7,13 +7,13 @@ import matplotlib.pyplot as plt
 import mne
 
 #%% --- Constants ---
-file_name = '3-45Hz_20250626_155728_sub-Harry_file-HBraintest1_raw.fif'
+file_name = 'mne_raw_filtered_3-45Hz.fif'
 
-file_location = r'W:\Data\2025_06_26_Brain\processed'
+file_location = r'W:\Data\2025_7_7_empty_room\brain_FL-on_000\concat\mne_raw'
 
 fif_fname = os.path.join(file_location, file_name)
 
-sens_type = 2 # 0 for NMOR, 1 for Fieldline, 2 for Fieldline with DiN
+sens_type = 0 # 0 for NMOR, 1 for Fieldline, 2 for Fieldline with DiN
 
 #%%f
 raw_filtered = mne.io.read_raw_fif(fif_fname, preload=True)  # Load the filtered raw data
@@ -21,7 +21,8 @@ raw_filtered = mne.io.read_raw_fif(fif_fname, preload=True)  # Load the filtered
 events = mne.find_events(raw_filtered, stim_channel='di32', verbose=True)
 
 #%% EMG Triggered TFR
-emg_ch = 'ai117'
+#emg_ch = 'ai117'
+emg_ch = 'auxin0'  # Change to the actual EMG channel name in your data
 
 print('All channels:', raw_filtered.ch_names)
 print(f"Original type of {emg_ch}:", raw_filtered.get_channel_types(picks=[raw_filtered.ch_names.index(emg_ch)]))

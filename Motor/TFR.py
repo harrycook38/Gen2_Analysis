@@ -7,13 +7,15 @@ import matplotlib.pyplot as plt
 import mne
 
 #%% --- Constants ---
-file_name = 'mne_raw_filtered_3-45Hz.fif'
+file_name = '3-45Hz_20250626_155728_sub-Harry_file-HBraintest1_raw.fif'
 
-file_location = r'W:\Data\2025_07_03_brain1_harry\daq_harry_1_000\concat\mne_raw'
+file_location = r'W:\Data\2025_06_26_Brain\processed'
 
 fif_fname = os.path.join(file_location, file_name)
 
-sens_type = 0 # 0 for NMOR, 1 for Fieldline, 2 for Fieldline with DiN
+sens_type = 2 # 0 for NMOR, 1 for Fieldline, 2 for Fieldline with DiN
+
+perm_test = False # Set to True to run the cluster-based permutation test
 
 #%%
 
@@ -114,8 +116,8 @@ elif sens_type == 2:
 
 epochs = mne.Epochs(
     raw_filtered, events, event_id=None,  # Use filtered data and event informatio
-    tmin=-0.5, tmax=2.,
-    baseline=(-0.5, -0.1),
+    tmin=-0.5, tmax=3,
+    baseline=(-0.4, -0.05),
     detrend=1, 
     picks=picks,  # Select the channels for analysis (e.g., 'B_field')
     preload=True,
@@ -169,9 +171,82 @@ tfr = mne.time_frequency.tfr_multitaper(
 )
 
 # Baseline correct
-tfr.apply_baseline(baseline=(-0.5, -0.1), mode='mean')
+# tfr = tfr.apply_baseline(baseline=(-0.4, -0.1), mode='mean')
 
 # Plot channel 0 (or any other)
-plot_tfr(tfr, channel_idx=0, cmap='RdBu_r')
+plot_tfr(tfr, channel_idx=0, cmap='RdBu_r')#, vmin=-0.25e-24, vmax=1.1e-24)
+
+# %% Cluster-based permutation test for TFR
+
+from mne.time_frequency import tfr_multitaper
+from mne.stats import permutation_cluster_1samp_test
+if perm_test == True:
+    # --- Parameters ---
+    frequencies = np.linspace(10, 30, 100)
+    n_cycles = frequencies / 3.0
+    time_bandwidth = 2.0
+    channel_idx = 0  # choose channel to analyse
+    alpha = 0.05  # significance threshold
+
+    # --- Compute TFR without averaging ---
+    tfr_epochs = tfr_multitaper(
+        epochs,
+        freqs=frequencies,
+        n_cycles=n_cycles,
+        time_bandwidth=time_bandwidth,
+        return_itc=False,
+        average=False,
+        n_jobs=-1
+    )
+    tfr_epochs.apply_baseline(baseline=(-0.5, -0.1), mode='mean')
+
+    # --- Extract data for selected channel ---
+    data = tfr_epochs.data[:, channel_idx, :, :]  # shape: (n_epochs, n_freqs, n_times)
+
+    # --- Run cluster-based permutation test ---
+    T_obs, clusters, cluster_p_values, H0 = permutation_cluster_1samp_test(
+        data,
+        threshold=None,
+        tail=0,
+        n_permutations=1000, 
+        seed=42,
+        n_jobs=-1
+    )
+
+    # --- Create significance mask ---
+    significant_mask = np.zeros(data.shape[1:], dtype=bool)
+    for c, p_val in zip(clusters, cluster_p_values):
+        if p_val < alpha:
+            significant_mask[c] = True  # c is a tuple of (freq_inds, time_inds)
+
+    # --- Plot TFR with significance borders ---
+    tfr_avg = tfr_epochs.average()  # average across epochs for plotting
+    power = tfr_avg.data[channel_idx]
+
+    fig, ax = plt.subplots(figsize=(10, 6))
+    mesh = ax.pcolormesh(
+        tfr_avg.times,
+        tfr_avg.freqs,
+        power,
+        shading='auto',
+        cmap='RdBu_r',
+        vmin=-1.1e-24,
+        vmax=1.1e-24
+    )
+    plt.colorbar(mesh, ax=ax, label='Power')
+    ax.contour(
+        tfr_avg.times,
+        tfr_avg.freqs,
+        significant_mask,
+        levels=[0.5],
+        colors='black',
+        linewidths=1.5
+    )
+    ax.set_title(f'TFR with Significant Clusters - {tfr_avg.ch_names[channel_idx]}')
+    ax.set_xlabel('Time (s)')
+    ax.set_ylabel('Frequency (Hz)')
+    plt.tight_layout()
+    plt.show()
+
 
 # %%

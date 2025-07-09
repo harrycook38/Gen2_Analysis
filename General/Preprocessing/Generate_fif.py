@@ -6,10 +6,10 @@ import mne
 
 #%% --- Constants ---
 # Set the base directory where the data files are stored
-base_directory = r'W:\Data\2025_07_08-H_brain\braingrad1_000\concat'
+base_directory = r'W:\Data\2025_07_09_ania_brain\ania_grad_1_1.6k_000\concat'
 
 # Set the output directory where the processed MNE Raw file will be saved
-output_directory = r'W:\Data\2025_07_08-H_brain\braingrad1_000\concat\mne_raw'
+output_directory = r'W:\Data\2025_07_09_ania_brain\ania_grad_1_1.6k_000\concat\mne_raw'
 
 # Extract the folder name from the path for use in filenames later
 folder_name = os.path.basename(base_directory)
@@ -22,9 +22,6 @@ P1 = 50
 
 # Compute the scaling factor
 scal_fac = round(-299 * P1 ** (-0.779), 2)
-
-# Define the digital sampling frequency of the Zbox
-sfreq = 837.1
 
 # Define the list of target strings used to import the corresponding csv file
 target_strings = ['stream_shift_avg', 'trigin1_avg', 'auxin0_avg']
@@ -132,7 +129,20 @@ for entry in folder_data[folder_name].values():
         # This ensures that we have unique and normalized timestamps for each data channel
         entry['data'] = remove_repd_timestamps(entry['data'], column_index=1)
 
+# Compute the sampling frequency from the cleaned timestamps
+timestamps = folder_data[folder_name]['B_field']['data'][:, 1]
 
+# Calculate time difference between first two unique timestamps
+dt = np.diff(timestamps)
+dt = dt[~np.isnan(dt)]  # Remove NaNs
+dt = dt[dt > 0]         # Only keep positive intervals
+
+if len(dt) == 0:
+    raise ValueError("Could not compute sample interval: no valid time differences found.")
+
+# Compute sfreq as the inverse of the first positive time difference
+sfreq = 1.0 / dt[0]
+print(f"Computed sampling frequency from timestamps: {sfreq:.3f} Hz")
 #We have now created a data structure, which can be used as is, or we can convert it to the fif format.
 
 #%% --- Build Raw object ---

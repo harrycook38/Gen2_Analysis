@@ -9,13 +9,16 @@ import mne
 #%% --- Constants ---
 file_name = 'mne_raw_filtered_3-45Hz.fif'
 
-file_location = r'W:\Data\2025_7_7_empty_room\brain_FL-on_000\concat\mne_raw'
+file_location = r'W:\Data\2025_07_09_ania_brain\ania_grad_1_1.6k_000\concat\mne_raw'
 
 fif_fname = os.path.join(file_location, file_name)
 
 sens_type = 0 # 0 for NMOR, 1 for Fieldline, 2 for Fieldline with DiN
+perm_test = True # Set to True to run the cluster-based permutation test
 
-perm_test = False # Set to True to run the cluster-based permutation test
+add_10Hz_filter = True  # Set to True to add a 10 Hz low-pass filter to the epochs
+baseline_interval = (-0.4, -0.1)  # Baseline interval for TFR and epochs
+
 
 #%%
 
@@ -23,7 +26,7 @@ from mne.time_frequency import psd_array_welch
 
 def plot_asd_comparison_epochs(raw_data, epochs, picks, title='ASD Before and After Epoch Rejection', fmax=100):
     sfreq = raw_data.info['sfreq']
-    data_before, _ = raw_data[picks]
+    data_before, _ = raw_data[picks] 
 
     # --- Before rejection ---
     n_fft = min(round(10 * sfreq), data_before.shape[1])
@@ -117,13 +120,18 @@ elif sens_type == 2:
 epochs = mne.Epochs(
     raw_filtered, events, event_id=None,  # Use filtered data and event informatio
     tmin=-0.5, tmax=3,
-    baseline=(-0.3, -0.05),
+    baseline=baseline_interval,
     detrend=1, 
     picks=picks,  # Select the channels for analysis (e.g., 'B_field')
     preload=True,
     verbose=True,
     reject = reject
-).filter(l_freq=10, h_freq=45, method='iir', iir_params=dict(order=4, ftype='butter'))  # Apply bandpass filter
+)
+
+if add_10Hz_filter == True:
+    epochs.filter(l_freq=10, h_freq=45, method='iir', iir_params=dict(order=4, ftype='butter'))  # Apply bandpass filter
+
+
 # --- Evoked Response ---
 evoked = epochs.average()  # Compute the evoked response
 evoked.plot(titles='Evoked Response', time_unit='s', spatial_colors=True)  # Plot the evoked response
@@ -171,7 +179,7 @@ tfr = mne.time_frequency.tfr_multitaper(
 )
 
 # Baseline correct
-tfr = tfr.apply_baseline(baseline=(-0.2, -0.1), mode='mean')
+tfr = tfr.apply_baseline(baseline=baseline_interval, mode='mean')
 
 # Plot channel 0 (or any other)
 plot_tfr(tfr, channel_idx=0, cmap='RdBu_r')#, vmin=-0.25e-24, vmax=1.1e-24)
@@ -198,7 +206,7 @@ if perm_test == True:
         average=False,
         n_jobs=-1
     )
-    tfr_epochs.apply_baseline(baseline=(-0.5, -0.1), mode='mean')
+    tfr_epochs.apply_baseline(baseline=baseline_interval, mode='mean')
 
     # --- Extract data for selected channel ---
     data = tfr_epochs.data[:, channel_idx, :, :]  # shape: (n_epochs, n_freqs, n_times)

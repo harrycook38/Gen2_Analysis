@@ -3,8 +3,8 @@ import csv
 from collections import defaultdict
 
 # Define your input/output paths
-input_folder = r'W:\Data\2025_07_08-H_brain\braingrad1_000'
-output_folder = r'W:\Data\2025_07_08-H_brain\braingrad1_000\concat'
+input_folder = r'W:\Data\2025_07_09_ania_brain\ania_grad_1_1.6k_000'
+output_folder = r'W:\Data\2025_07_09_ania_brain\ania_grad_1_1.6k_000\concat'
 os.makedirs(output_folder, exist_ok=True)
 
 # Group files by base name (excluding the numeric suffix)
@@ -21,6 +21,7 @@ for base, files in file_groups.items():
     with open(output_path, 'w', newline='', encoding='utf-8') as fout:
         writer = None
         for i, fname in enumerate(sorted(files)):
+            print(f"Concatenating {fname}...")
             fpath = os.path.join(input_folder, fname)
             with open(fpath, 'r', encoding='utf-8') as fin:
                 reader = csv.reader(fin, delimiter=';')

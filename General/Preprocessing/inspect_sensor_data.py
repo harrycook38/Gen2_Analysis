@@ -12,7 +12,7 @@ from matplotlib.colors import LogNorm
 
 file_name = 'mne_raw.fif'
 
-file_location = r'W:\Data\2025_07_08-H_brain\braingrad1_000\concat\mne_raw'
+file_location = r'W:\Data\2025_07_09_ania_brain\ania_grad_1_1.6k_000\concat\mne_raw'
 
 fif_fname = os.path.join(file_location, file_name)
 
@@ -28,25 +28,57 @@ raw = mne.io.read_raw_fif(fif_fname, preload=True)
 
 sfreq = raw.info['sfreq'] 
 
-# Find the events from the stimulus channel ('trigin1'), which is the audio onset
+#%% --- Load + Process Raw in MNE ---
+raw = mne.io.read_raw_fif(fif_fname, preload=True)
+sfreq = raw.info['sfreq']
+
+# Define events and picks
 if sens_type == 0:
     events = mne.find_events(raw, stim_channel='trigin1', verbose=True)
     picks = mne.pick_channels(raw.info['ch_names'], include=['B_field'])
-if sens_type == 1:
-    events = mne.find_events(raw, stim_channel='ai113', verbose=True, min_duration=0.0005,   output='onset', consecutive=True)
+elif sens_type == 1:
+    events = mne.find_events(raw, stim_channel='ai113', verbose=True, min_duration=0.0005, output='onset', consecutive=True)
     picks = mne.pick_channels(raw.info['ch_names'], include=['s69_bz'])
-if sens_type == 2:
+elif sens_type == 2:
     events = mne.find_events(raw, stim_channel='di32', verbose=True, min_duration=0.0005, output='onset', consecutive=True)
     picks = mne.pick_channels(raw.info['ch_names'], include=['s69_bz'])
-# Pick the channels to process]
 
+# --- 🔍 Detect and Fix NaNs in original data before filtering ---
+data = raw.get_data(picks=picks)
+nan_indices = np.argwhere(np.isnan(data))
+num_nans = nan_indices.shape[0]
+total_vals = data.size
+nan_fraction = num_nans / total_vals
+
+print(f"🔍 Found {num_nans} NaN(s) in the original signal "
+      f"({nan_fraction:.8f} of total values).")
+
+# Replace NaNs with previous (or next) value
+for ch_idx, time_idx in nan_indices:
+    ch_name = raw.ch_names[picks[ch_idx]]
+    time = raw.times[time_idx]
+    print(f"→ Replacing NaN in channel '{ch_name}' at time {time:.3f}s (index {time_idx})")
+    
+    if time_idx == 0:
+        data[ch_idx, time_idx] = data[ch_idx, time_idx + 1]
+    else:
+        data[ch_idx, time_idx] = data[ch_idx, time_idx - 1]
+
+# Update raw object with fixed data
+raw._data[picks, :] = data
+
+# Confirm fix
+if not np.isnan(raw.get_data(picks=picks)).any():
+    print("✅ All NaNs have been successfully removed.")
+else:
+    print("⚠️ NaNs still present after attempted fix.")
 # Copy raw data to avoid modifying it
 raw_filtered = raw.copy()
 # Apply Notch Filter to raw_filtered (but not raw)
 raw_filtered.notch_filter(freqs=[50], picks=picks,
                           notch_widths=6,  # Width = full stopband, not transition
                           trans_bandwidth=1,
-                          verbose=True)
+                          verbose=False)
 
 # Apply Butterworth Bandpass Filter to the same raw_filtered data
 raw_filtered.filter(
@@ -56,25 +88,30 @@ raw_filtered.filter(
 #%% --- Spectrogram ---
 #I want to create a time-dependent spectrogram of the data, to see if we get any 'walking' noise
 def plot_spectrogram(raw_data, sfreq):
-    # Import the scipy function for computing the spectrogram
     from scipy.signal import spectrogram
-    
-    # Compute the spectrogram: f - frequencies, t - time, Sxx - power spectral density
-    f, t, Sxx = spectrogram(raw_data, fs=sfreq, nperseg=2048, noverlap=1024)
 
-    # Convert to Amplitude Spectral Density (sqrt of PSD)
-    ASD = np.sqrt(Sxx)  # Convert to picotesla/√Hz
-    
-    # Plot ASD directly (linear scale, not dB)
-    plt.figure(figsize=(12, 5))
-    mesh = plt.pcolormesh(t, f, ASD, shading='gouraud', norm=LogNorm(vmin=ASD[ASD > 0].min(), vmax=ASD.max()))
-    plt.ylim(0, 100)
-    plt.title('Spectrogram (Log-scaled ASD)')
-    plt.ylabel('Frequency (Hz)')
-    plt.xlabel('Time (s)')
-    plt.colorbar(mesh, label='Amplitude (T/√Hz)')
-    plt.tight_layout()
-    plt.show()
+    # Compute the spectrogram
+    f, t, Sxx = spectrogram(raw_data, fs=sfreq, nperseg=2048, noverlap=1024)
+    ASD = np.sqrt(Sxx)
+
+    # Check for non-zero ASD values for LogNorm
+    if np.any(ASD > 0):
+        vmin = ASD[ASD > 0].min()
+        vmax = ASD.max()
+
+        plt.figure(figsize=(12, 5))
+        mesh = plt.pcolormesh(t, f, ASD, shading='gouraud',
+                              norm=LogNorm(vmin=vmin, vmax=vmax))
+        plt.ylim(0, 100)
+        plt.title('Spectrogram (Log-scaled ASD)')
+        plt.ylabel('Frequency (Hz)')
+        plt.xlabel('Time (s)')
+        plt.colorbar(mesh, label='Amplitude (T/√Hz)')
+        plt.tight_layout()
+        plt.show()
+    else:
+        print("All ASD values are zero or negative. Cannot plot spectrogram with LogNorm.")
+
 
 # Call the spectrogram function for the 'B_field' channel of the raw data
 if sens_type == 0:

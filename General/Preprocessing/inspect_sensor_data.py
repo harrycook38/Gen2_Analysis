@@ -12,7 +12,7 @@ from matplotlib.colors import LogNorm
 
 file_name = 'mne_raw.fif'
 
-file_location = r'W:\Data\2025_07_09_ania_brain\ania_grad_1_1.6k_000\concat\mne_raw'
+file_location = r'W:\Data\2025_07_09_ania_brain\ania_grad_light_only_1.6k_000\concat\mne_raw'
 
 fif_fname = os.path.join(file_location, file_name)
 

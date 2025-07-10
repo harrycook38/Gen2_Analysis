@@ -7,15 +7,17 @@ import matplotlib.pyplot as plt
 import mne
 
 # %% --- Constants ---
-file_name = 'mne_raw_filtered_3-45Hz.fif'
-file_location = r'W:\Data\2025_07_09_ania_brain\ania_mag_1_1.6k\concat\mne_raw'
+file_name = '3-45Hz_Ania_file-FL14mmaway_raw.fif'
+file_location = r'W:\Data\2025_07_10_ania_fieldline\processed'
 fif_fname = os.path.join(file_location, file_name)
 
-sens_type = 1               # 0 = NMOR grad, 1 = NMOR mag, 2 = Fieldline + Auxin, 3 = Fieldline + DiN
-perm_test = False          # Set to True to run the cluster-based permutation test
-add_10Hz_filter = False    # Set to True to apply 10 Hz low-pass filter to epochs
-baseline_interval = (-0.4, -0.1)  # Universal baseline interval for TFR and epochs
-too_many_events = 500   # Threshold for number of events to apply edge detection
+sens_type = 3                       # 0 = NMOR grad, 1 = NMOR mag, 2 = Fieldline + Auxin, 3 = Fieldline + DiN
+perm_test = False                   # Set to True to run the cluster-based permutation test
+add_10Hz_filter = False             # Set to True to apply 10 Hz low-pass filter to epochs
+baseline_interval = (-0.4, -0.1)    # Universal baseline interval for TFR and epochs
+too_many_events = 500               # Threshold for number of events to apply edge detection
+save_amp_envelope = True            # Set to True to save the amplitude envelope plot
+save_amp_env_where = r'W:\Data\2025_07_10_compare_sensors'
 
 # %% --- Helper Function: Plot ASD Before/After Epoch Rejection ---
 from mne.time_frequency import psd_array_welch
@@ -65,7 +67,7 @@ raw_filtered = mne.io.read_raw_fif(fif_fname, preload=True)
 if sens_type == 0:
     events = mne.find_events(raw_filtered, stim_channel='trigin1', verbose=True)
     picks = mne.pick_channels(raw_filtered.info['ch_names'], include=['B_field'])
-    reject = dict(mag=3.5e-12)
+    reject = dict(mag=3e-12)
 
 if sens_type == 1:
     events = mne.find_events(raw_filtered, stim_channel='trigin1', verbose=True)
@@ -97,7 +99,7 @@ elif sens_type == 2: #Added edge detection for auxin because mne struggles.
 elif sens_type == 3:
     events = mne.find_events(raw_filtered, stim_channel='di32', verbose=True, min_duration=0.0005, output='onset', consecutive=True)
     picks = mne.pick_channels(raw_filtered.info['ch_names'], include=['s69_bz'])
-    reject = dict(mag=3.8e-12)
+    reject = dict(mag=10e-12)
 
 # %% --- Create Epochs ---
 epochs = mne.Epochs(
@@ -206,6 +208,27 @@ plt.legend()
 plt.grid(True)
 plt.tight_layout()
 plt.show()
+
+#%% --- Save Amplitude Envelope ---
+if save_amp_envelope:
+    # Create output folder if needed
+    os.makedirs(save_amp_env_where, exist_ok=True)
+
+    # Create a filename that identifies the run and channel
+    filename = f'envelope_ch{channel_idx}_peak{peak_freq:.1f}Hz.npz'
+    filepath = os.path.join(save_amp_env_where, filename)
+
+    # Save the data
+    np.savez(
+        filepath,
+        peak_freq=peak_freq,
+        peak_time=peak_time,
+        times=plot_times,
+        mean_amp=mean_amp_safe,
+        sem_amp=sem_amp_safe
+    )
+
+    print(f"Exported envelope data to: {filepath}")
 
 # %% --- Cluster-based Permutation Test (Optional) ---
 if perm_test:

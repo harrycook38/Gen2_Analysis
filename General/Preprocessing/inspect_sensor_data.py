@@ -10,9 +10,9 @@ from matplotlib.colors import LogNorm
 
 #%%%
 
-file_name = 'mne_raw.fif'
+file_name = 'Ania_file-FL14mmaway_raw.fif'
 
-file_location = r'W:\Data\2025_07_09_ania_brain\ania_grad_light_only_1.6k_000\concat\mne_raw'
+file_location = r'W:\Data\2025_07_10_ania_fieldline'
 
 fif_fname = os.path.join(file_location, file_name)
 
@@ -20,7 +20,7 @@ l_freq = 3.0  # Low frequency for bandpass filter
 h_freq = 45.0  # High frequency for bandpass filter
 
 generate_filtered_fif = True  # Set to True to generate the filtered .fif file in same directory as the raw .fif file
-sens_type = 0  # 0 for NMOR, 1 for Fieldline, 2 for Fieldline with DiN
+sens_type = 2  # 0 for NMOR, 1 for Fieldline, 2 for Fieldline with DiN
 
 #%% --- Load + Process Raw in MNE ---
 # Load the raw object from the saved .fif file
@@ -116,7 +116,7 @@ def plot_spectrogram(raw_data, sfreq):
 # Call the spectrogram function for the 'B_field' channel of the raw data
 if sens_type == 0:
     plot_spectrogram(raw.get_data(picks='B_field')[0], sfreq)
-if sens_type == 1:
+if sens_type in (1, 2):
     plot_spectrogram(raw.get_data(picks='s69_bz')[0], sfreq)
 #%% --- PSD plots ---
 from mne.time_frequency import psd_array_welch

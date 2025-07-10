@@ -11,10 +11,11 @@ file_name = 'mne_raw_filtered_3-45Hz.fif'
 file_location = r'W:\Data\2025_07_09_ania_brain\ania_mag_1_1.6k\concat\mne_raw'
 fif_fname = os.path.join(file_location, file_name)
 
-sens_type = 1               # 0 = NMOR grad, 1 = NMOR mag, 2 = Fieldline, 3 = Fieldline + DiN
+sens_type = 1               # 0 = NMOR grad, 1 = NMOR mag, 2 = Fieldline + Auxin, 3 = Fieldline + DiN
 perm_test = False          # Set to True to run the cluster-based permutation test
 add_10Hz_filter = False    # Set to True to apply 10 Hz low-pass filter to epochs
-baseline_interval = (-0.4, -0.1)  # Baseline interval for TFR and epochs
+baseline_interval = (-0.4, -0.1)  # Universal baseline interval for TFR and epochs
+too_many_events = 500   # Threshold for number of events to apply edge detection
 
 # %% --- Helper Function: Plot ASD Before/After Epoch Rejection ---
 from mne.time_frequency import psd_array_welch
@@ -58,22 +59,22 @@ def plot_asd_comparison_epochs(raw_data, epochs, picks, title='ASD Before and Af
     plt.tight_layout()
     plt.show()
 
-# %% --- Load Data and Extract Events ---
+# %% --- Load data, extract events, sensor dependent ---
 raw_filtered = mne.io.read_raw_fif(fif_fname, preload=True)
 
 if sens_type == 0:
     events = mne.find_events(raw_filtered, stim_channel='trigin1', verbose=True)
     picks = mne.pick_channels(raw_filtered.info['ch_names'], include=['B_field'])
-    reject = dict(mag=5e-12)
+    reject = dict(mag=3.5e-12)
 
 if sens_type == 1:
     events = mne.find_events(raw_filtered, stim_channel='trigin1', verbose=True)
     picks = mne.pick_channels(raw_filtered.info['ch_names'], include=['B_field'])
     reject = dict(mag=7e-12)
 
-elif sens_type == 2:
+elif sens_type == 2: #Added edge detection for auxin because mne struggles.
     events = mne.find_events(raw_filtered, stim_channel='ai113', verbose=True, min_duration=0.0005, output='onset', consecutive=True)
-    if len(events) > 500:
+    if len(events) > too_many_events: # If too many events detected, apply edge detection
         from scipy.ndimage import uniform_filter1d
         data, times = raw_filtered.copy().pick('ai113').get_data(return_times=True)
         signal = data[0]
@@ -120,13 +121,19 @@ evoked.plot(titles='Evoked Response', time_unit='s', spatial_colors=True)
 plot_asd_comparison_epochs(raw_filtered, epochs, picks=picks, title='ASD Before and After Epoch Rejection', fmax=100)
 
 # %% --- TFR (Average) ---
-def plot_tfr(tfr, channel_idx=0, vmin=None, vmax=None, cmap='RdBu_r'):
+def plot_tfr(tfr, channel_idx=0, vmin=None, vmax=None, cmap='RdBu_r', percentile=99):
     power = tfr.data[channel_idx]
+    
     if vmin is None or vmax is None:
-        vmin = np.percentile(power, 1)
-        vmax = np.percentile(power, 99)
+        high = np.percentile(power, percentile)
+        low = np.percentile(power, 100 - percentile)
+        abs_limit = max(abs(low), abs(high))
+        vmin = -abs_limit
+        vmax = abs_limit
+
     plt.figure(figsize=(10, 6))
-    mesh = plt.pcolormesh(tfr.times, tfr.freqs, power, shading='auto', vmin=vmin, vmax=vmax, cmap=cmap)
+    mesh = plt.pcolormesh(tfr.times, tfr.freqs, power, shading='auto',
+                          vmin=vmin, vmax=vmax, cmap=cmap)
     plt.colorbar(mesh, label='Power')
     plt.title(f'TFR (Multitaper) - {tfr.ch_names[channel_idx]}')
     plt.xlabel('Time (s)')
@@ -149,12 +156,14 @@ plot_tfr(tfr, channel_idx=0, cmap='RdBu_r')
 # %% --- TFR (Per Epoch) and Envelope Analysis ---
 channel_idx = 0
 
+# --- Pull TFR per epoch to do stats ---
 tfr = mne.time_frequency.tfr_multitaper(
     epochs, freqs=frequencies, n_cycles=n_cycles,
     time_bandwidth=time_bandwidth, return_itc=False, average=False, n_jobs=-1
 )
 tfr.apply_baseline(baseline=baseline_interval, mode='mean')
 
+# --- Find peak frequency and time ---
 power_data = tfr.data[:, channel_idx]
 mean_power = power_data.mean(axis=0)
 peak_idx = np.unravel_index(np.argmax(mean_power), mean_power.shape)
@@ -163,6 +172,7 @@ peak_freq = tfr.freqs[peak_freq_idx]
 peak_time = tfr.times[peak_time_idx]
 print(f"Peak frequency = {peak_freq:.2f} Hz at {peak_time:.2f} s")
 
+# --- Extract time-envelope 5Hz around peak frequency ---
 freq_window = 2.5  # Hz
 freq_mask = (tfr.freqs >= peak_freq - freq_window) & (tfr.freqs <= peak_freq + freq_window)
 
@@ -172,8 +182,9 @@ signed_amp_band = signed_amp.mean(axis=1)
 mean_amp = signed_amp_band.mean(axis=0)
 sem_amp = signed_amp_band.std(axis=0, ddof=1) / np.sqrt(signed_amp_band.shape[0])
 
-safe_tmin = -0.3
-safe_tmax = 2.8
+# --- Adjust time range to avoid edge effects --- 
+safe_tmin = epochs.tmin + 0.2  # Start after baseline
+safe_tmax = epochs.tmax - 0.2  # Stop before end of epoch
 
 plot_times = tfr.times[(tfr.times >= safe_tmin) & (tfr.times <= safe_tmax)]
 time_mask = (tfr.times >= safe_tmin) & (tfr.times <= safe_tmax)
@@ -197,9 +208,8 @@ plt.tight_layout()
 plt.show()
 
 # %% --- Cluster-based Permutation Test (Optional) ---
-from mne.stats import permutation_cluster_1samp_test
-
 if perm_test:
+    from mne.stats import permutation_cluster_1samp_test
     alpha = 0.05
     tfr_epochs = mne.time_frequency.tfr_multitaper(
         epochs, freqs=frequencies, n_cycles=n_cycles,
